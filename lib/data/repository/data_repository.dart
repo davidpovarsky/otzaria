@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+import 'package:otzaria/core/ios_spotlight_indexer.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -15,7 +17,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 /// data providers (file system, Hive storage, and Tantivy search engine).
 ///
 /// This repository implements the Repository pattern to abstract the data source
-/// implementation details from the business logic. It provides a clean API for
+/// implementation details from the data source implementation details from the business logic. It provides a clean API for
 /// accessing and manipulating application data from various sources.
 class DataRepository {
   /// Handles file system operations like reading book texts and metadata
@@ -61,7 +63,9 @@ class DataRepository {
   /// Returns a [Future] that completes with a [Library] object containing
   /// the full library structure and metadata
   Future<Library> _getLibrary() async {
-    return _fileSystemData.getLibrary();
+    final library = await _fileSystemData.getLibrary();
+    unawaited(IOSSpotlightIndexer.instance.indexLibrary(library));
+    return library;
   }
 
   /// Retrieves the list of books from the Otzar HaHochma project
@@ -258,231 +262,4 @@ class BookSearchEntry {
     this.eraOrder = 5,
     this.isUserBook = false,
   });
-}
-
-@visibleForTesting
-List<int> filterBookSearchEntries({
-  required List<BookSearchEntry> entries,
-  required List<String> queryWords,
-  required List<String> topics,
-  required bool sortByRatio,
-  required String normalizedQuery,
-}) {
-  final preparedEntries = entries.map((entry) {
-    final normalizedTitle = _normalizeBookSearchText(entry.title);
-    final normalizedAuthor = _normalizeBookSearchText(entry.author);
-    final topics = entry.topics
-        .split(',')
-        .map((topic) => topic.trim())
-        .where((topic) => topic.isNotEmpty)
-        .toSet();
-
-    // כל המילים שמולן נבדקת השאילתה — כותרת, מחבר וכינויים יחד
-    final searchWords = <String>{
-      ...normalizedTitle.split(' '),
-      ...normalizedAuthor.split(' '),
-      for (final acronym in entry.acronyms) ...acronym.split(' '),
-    }..remove('');
-
-    return _PreparedBookSearchEntry(
-      index: entry.index,
-      normalizedTitle: normalizedTitle,
-      searchWords: searchWords,
-      topics: topics,
-      acronyms: entry.acronyms,
-      eraOrder: entry.eraOrder,
-      isUserBook: entry.isUserBook,
-    );
-  });
-
-  // מטמון לזוגות (מילת שאילתה, מילת טקסט) — מילים נפוצות ('מסכת', 'על')
-  // חוזרות באלפי ספרים ומחושבות פעם אחת בלבד.
-  final pairMemo = {
-    for (final word in queryWords) word: <String, bool>{},
-  };
-  bool wordMatchesEntry(String queryWord, Set<String> searchWords) {
-    final memo = pairMemo[queryWord]!;
-    for (final textWord in searchWords) {
-      if (memo[textWord] ??= _wordPairMatches(queryWord, textWord)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  final filtered = preparedEntries.where((entry) {
-    final matchesQuery = queryWords.every(
-      (word) => wordMatchesEntry(word, entry.searchWords),
-    );
-    final matchesTopics =
-        topics.isEmpty || topics.every((topic) => entry.topics.contains(topic));
-
-    return matchesQuery && matchesTopics;
-  }).toList();
-
-  if (sortByRatio) {
-    final scored = [
-      for (final entry in filtered)
-        _ScoredBookSearchEntry(
-          index: entry.index,
-          // שכבות עדיפות שאינן חופפות (כותרת מדויקת > מכילה > כינוי > fuzzy).
-          // התאמה מדויקת קודמת לדור כדי שספר יסוד נטול-דור ('קידושין') לא ייקבר
-          // מתחת לפירושים מתוארכים. בתוך כל שכבה: דור ואז ratio.
-          tier: entry.normalizedTitle == normalizedQuery
-              ? 3
-              : entry.normalizedTitle.contains(normalizedQuery)
-                  ? 2
-                  : entry.acronyms.any((a) => a.contains(normalizedQuery))
-                      ? 1
-                      : 0,
-          eraOrder: entry.eraOrder,
-          isUserBook: entry.isUserBook,
-          ratio: ratio(normalizedQuery, entry.normalizedTitle),
-        ),
-    ]..sort((a, b) {
-        if (a.tier != b.tier) return b.tier.compareTo(a.tier);
-        if (a.eraOrder != b.eraOrder) return a.eraOrder.compareTo(b.eraOrder);
-        // בתוך אותו דור — ספרים אישיים תמיד אחרונים.
-        if (a.isUserBook != b.isUserBook) return a.isUserBook ? 1 : -1;
-        if (a.ratio != b.ratio) return b.ratio.compareTo(a.ratio);
-        return a.index.compareTo(b.index);
-      });
-
-    return [
-      for (final entry in scored) entry.index,
-    ];
-  }
-
-  return [
-    for (final entry in filtered) entry.index,
-  ];
-}
-
-class _PreparedBookSearchEntry {
-  final int index;
-  final String normalizedTitle;
-
-  /// כל המילים המנורמלות של הכותרת, המחבר והכינויים — מאוחדות לבדיקה אחת.
-  final Set<String> searchWords;
-  final Set<String> topics;
-  final List<String> acronyms;
-  final int eraOrder;
-  final bool isUserBook;
-
-  const _PreparedBookSearchEntry({
-    required this.index,
-    required this.normalizedTitle,
-    required this.searchWords,
-    required this.topics,
-    required this.acronyms,
-    required this.eraOrder,
-    required this.isUserBook,
-  });
-}
-
-class _ScoredBookSearchEntry {
-  final int index;
-  final int tier;
-  final int eraOrder;
-  final bool isUserBook;
-  final int ratio;
-
-  const _ScoredBookSearchEntry({
-    required this.index,
-    required this.tier,
-    required this.eraOrder,
-    required this.isUserBook,
-    required this.ratio,
-  });
-}
-
-// Damerau-Levenshtein (OSA) הבודק רק האם המרחק ≤ k, עם שורות מתגלגלות
-// ויציאה מוקדמת. הנרמול משאיר תווי BMP בלבד, לכן codeUnit == תו.
-bool _editDistanceAtMost(String a, String b, int k) {
-  final la = a.length;
-  final lb = b.length;
-  var prev2 = List<int>.filled(lb + 1, 0);
-  var prev = List<int>.generate(lb + 1, (j) => j);
-  var curr = List<int>.filled(lb + 1, 0);
-  var prevMin = 0;
-  for (var i = 1; i <= la; i++) {
-    curr[0] = i;
-    var rowMin = i;
-    final ca = a.codeUnitAt(i - 1);
-    for (var j = 1; j <= lb; j++) {
-      final cost = ca == b.codeUnitAt(j - 1) ? 0 : 1;
-      var best = prev[j - 1] + cost; // substitution
-      final deletion = prev[j] + 1;
-      if (deletion < best) best = deletion;
-      final insertion = curr[j - 1] + 1;
-      if (insertion < best) best = insertion;
-      // transposition of two adjacent characters
-      // e.g. אבועלפיה → אבולעפיה counts as 1 edit, not 2
-      if (i > 1 &&
-          j > 1 &&
-          ca == b.codeUnitAt(j - 2) &&
-          a.codeUnitAt(i - 2) == b.codeUnitAt(j - 1)) {
-        final transposition = prev2[j - 2] + cost;
-        if (transposition < best) best = transposition;
-      }
-      curr[j] = best;
-      if (best < rowMin) rowMin = best;
-    }
-    // ערכים עתידיים נגזרים משתי השורות האחרונות בתוספת עלות לא-שלילית,
-    // ולכן כשהמינימום בשתיהן חצה את k המרחק כבר לא ירד חזרה
-    if (rowMin > k && prevMin > k) return false;
-    final recycled = prev2;
-    prev2 = prev;
-    prev = curr;
-    curr = recycled;
-    prevMin = rowMin;
-  }
-  return prev[lb] <= k;
-}
-
-// Allowed edit distance by word length:
-// 1-4  chars → 0 (exact)
-// 4-8  chars → 1 typo
-// 8-12 chars → 2 typos
-// 12-16 chars → 3 typos
-// 16+  chars → 4 typos
-int _maxAllowedEdits(int len) {
-  if (len <= 4) return 0;
-  if (len <= 8) return 1;
-  if (len <= 12) return 2;
-  if (len <= 16) return 3;
-  return 4;
-}
-
-/// התאמת זוג מילים בודדות: הכלה, או מרחק עריכה שסיפו נגזר מהארוכה
-/// מבין השתיים — כך ההתאמה הדדית (מדות↔מידות).
-bool _wordPairMatches(String queryWord, String textWord) {
-  if (textWord.contains(queryWord)) return true;
-  if (queryWord.length < 3) return false;
-
-  final allowed = _maxAllowedEdits(
-      queryWord.length > textWord.length ? queryWord.length : textWord.length);
-  // שוויון מלא כבר כוסה ע"י contains
-  if (allowed == 0) return false;
-  // הפרש האורכים הוא חסם תחתון למרחק העריכה
-  if ((textWord.length - queryWord.length).abs() > allowed) return false;
-  return _editDistanceAtMost(queryWord, textWord, allowed);
-}
-
-/// התאמת מילת שאילתה לטקסט שלם (כותרת/מחבר מנורמלים) עם סלחנות לשגיאות כתיב.
-@visibleForTesting
-bool bookSearchWordMatchesFuzzy(String queryWord, String text) {
-  for (final textWord in text.split(' ')) {
-    if (textWord.isEmpty) continue;
-    if (_wordPairMatches(queryWord, textWord)) return true;
-  }
-  return false;
-}
-
-String _normalizeBookSearchText(String input) {
-  var cleaned = removeTeamim(removeVolwels(input));
-  cleaned = cleaned.replaceAll('"', '').replaceAll("'", '');
-  cleaned = cleaned.replaceAll('\u05F4', '').replaceAll('\u05F3', '');
-  cleaned = cleaned.replaceAll(RegExp(r'[^a-zA-Z0-9\u0590-\u05FF\s]'), ' ');
-  return cleaned.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
