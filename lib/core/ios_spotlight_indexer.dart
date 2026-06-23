@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:otzaria/core/error_log_file.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 
@@ -24,25 +25,43 @@ class IOSSpotlightIndexer {
 
     final items = _buildItems(library);
     if (items.isEmpty) {
+      _appendDiagnosticLog('No Spotlight items were built from the library.');
       return;
     }
 
     debugPrint('🔎 Spotlight: indexing ${items.length} Otzaria sources');
+    _appendDiagnosticLog(
+      'Started indexing ${items.length} Otzaria sources.',
+      details: {
+        'First item': items.first['title']?.toString(),
+        'First link': items.first['deepLink']?.toString(),
+      },
+    );
 
-    var reset = true;
-    for (var start = 0; start < items.length; start += _batchSize) {
-      final end = start + _batchSize > items.length
-          ? items.length
-          : start + _batchSize;
-      final batch = items.sublist(start, end);
-      await _channel.invokeMethod<void>('indexBooks', {
-        'reset': reset,
-        'items': batch,
-      });
-      reset = false;
+    try {
+      var reset = true;
+      for (var start = 0; start < items.length; start += _batchSize) {
+        final end = start + _batchSize > items.length
+            ? items.length
+            : start + _batchSize;
+        final batch = items.sublist(start, end);
+        await _channel.invokeMethod<void>('indexBooks', {
+          'reset': reset,
+          'items': batch,
+        });
+        reset = false;
+      }
+    } catch (error, stackTrace) {
+      _appendDiagnosticLog(
+        'Spotlight indexing failed.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
     }
 
     debugPrint('🔎 Spotlight: finished indexing ${items.length} Otzaria sources');
+    _appendDiagnosticLog('Finished indexing ${items.length} Otzaria sources.');
   }
 
   List<Map<String, Object?>> _buildItems(Library library) {
@@ -110,5 +129,23 @@ class IOSSpotlightIndexer {
         .map((part) => part.trim())
         .where((part) => part.isNotEmpty && part != 'ספריית אוצריא')
         .join(' › ');
+  }
+
+  void _appendDiagnosticLog(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, String?> details = const {},
+  }) {
+    try {
+      ErrorLogFile.append(
+        title: 'Spotlight Indexing',
+        error: error ?? message,
+        stackTrace: stackTrace,
+        details: details,
+      );
+    } catch (_) {
+      // Diagnostics must never affect app startup or library loading.
+    }
   }
 }
