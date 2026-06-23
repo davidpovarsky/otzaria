@@ -19,6 +19,7 @@ permissions:
 env:
   APP_BUNDLE_ID: com.mendelg.otzaria
   SIMULATOR_ARTIFACT_NAME: Otzaria-simulator-app
+  SIMULATOR_DISPLAY_NAME: Otzaria
   SIMULATOR_NAME: iPhone 16
   SIMULATOR_RUNTIME: iOS-18-5
 
@@ -57,6 +58,16 @@ jobs:
 
       - name: Build iOS Simulator app
         run: flutter build ios --simulator --debug --no-codesign
+
+      - name: Normalize simulator app metadata
+        run: |
+          set -euo pipefail
+          APP_PLIST="build/ios/iphonesimulator/Runner.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${SIMULATOR_DISPLAY_NAME}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName ${SIMULATOR_DISPLAY_NAME}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PLIST"
 
       - name: Package simulator app artifact
         run: |
