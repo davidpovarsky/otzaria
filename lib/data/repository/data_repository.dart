@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:otzaria/core/ios_spotlight_indexer.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
@@ -17,7 +17,7 @@ import 'package:otzaria/utils/text/text_manipulation.dart';
 /// data providers (file system, Hive storage, and Tantivy search engine).
 ///
 /// This repository implements the Repository pattern to abstract the data source
-/// implementation details from the data source implementation details from the business logic. It provides a clean API for
+/// implementation details from the business logic. It provides a clean API for
 /// accessing and manipulating application data from various sources.
 class DataRepository {
   /// Handles file system operations like reading book texts and metadata
@@ -64,7 +64,13 @@ class DataRepository {
   /// the full library structure and metadata
   Future<Library> _getLibrary() async {
     final library = await _fileSystemData.getLibrary();
-    unawaited(IOSSpotlightIndexer.instance.indexLibrary(library));
+    unawaited(
+      IOSSpotlightIndexer.instance.indexLibrary(library).catchError(
+        (Object error) {
+          debugPrint('Spotlight indexing failed: $error');
+        },
+      ),
+    );
     return library;
   }
 
