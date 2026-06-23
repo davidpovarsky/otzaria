@@ -1,0 +1,111 @@
+name: iOS simulator smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chatgpt/ios-stability-20260623
+    paths:
+      - '.github/workflows/ios-simulator-smoke.yml'
+      - 'ios/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+
+permissions:
+  contents: read
+
+env:
+  APP_BUNDLE_ID: com.mendelg.otzaria
+  SIMULATOR_ARTIFACT_NAME: Otzaria-simulator-app
+  SIMULATOR_NAME: iPhone 16
+  SIMULATOR_RUNTIME: iOS-18-5
+
+jobs:
+  simulator-smoke:
+    name: Build and launch on iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          dart --version
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -E 'iPhone 1[5-6]|iPad' || true
+          pod --version
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          pod install
+
+      - name: Build iOS Simulator app
+        run: flutter build ios --simulator --debug --no-codesign
+
+      - name: Package simulator app artifact
+        run: |
+          rm -rf build/ios/simulator-artifact
+          mkdir -p build/ios/simulator-artifact
+          ditto -c -k --keepParent build/ios/iphonesimulator/Runner.app "build/ios/simulator-artifact/${SIMULATOR_ARTIFACT_NAME}.zip"
+          shasum -a 256 "build/ios/simulator-artifact/${SIMULATOR_ARTIFACT_NAME}.zip" > "build/ios/simulator-artifact/${SIMULATOR_ARTIFACT_NAME}.zip.sha256"
+          ls -lh build/ios/simulator-artifact
+
+      - name: Create and boot simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          DEVICE_TYPE="com.apple.CoreSimulator.SimDeviceType.${SIMULATOR_NAME// /-}"
+          RUNTIME="com.apple.CoreSimulator.SimRuntime.${SIMULATOR_RUNTIME}"
+          UDID="$(xcrun simctl create "Otzaria CI" "$DEVICE_TYPE" "$RUNTIME")"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install and launch app
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          xcrun simctl install "$UDID" build/ios/iphonesimulator/Runner.app
+          xcrun simctl launch "$UDID" "$APP_BUNDLE_ID"
+          sleep 20
+          xcrun simctl io "$UDID" screenshot build/ios/simulator-artifact/otzaria-simulator-screenshot.png
+
+      - name: Collect simulator logs
+        if: always()
+        run: |
+          mkdir -p build/ios/simulator-artifact
+          UDID="${{ steps.simulator.outputs.udid }}"
+          if [ -n "$UDID" ]; then
+            xcrun simctl spawn "$UDID" log show --style compact --last 5m > build/ios/simulator-artifact/simulator-last-5m.log 2>&1 || true
+            xcrun simctl shutdown "$UDID" || true
+            xcrun simctl delete "$UDID" || true
+          fi
+
+      - name: Upload simulator artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SIMULATOR_ARTIFACT_NAME }}
+          path: |
+            build/ios/simulator-artifact/${{ env.SIMULATOR_ARTIFACT_NAME }}.zip
+            build/ios/simulator-artifact/${{ env.SIMULATOR_ARTIFACT_NAME }}.zip.sha256
+            build/ios/simulator-artifact/otzaria-simulator-screenshot.png
+            build/ios/simulator-artifact/simulator-last-5m.log
+          if-no-files-found: warn
+          retention-days: 14
