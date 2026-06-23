@@ -31,7 +31,9 @@ class IOSSpotlightIndexer {
 
     var reset = true;
     for (var start = 0; start < items.length; start += _batchSize) {
-      final end = (start + _batchSize).clamp(0, items.length);
+      final end = start + _batchSize > items.length
+          ? items.length
+          : start + _batchSize;
       final batch = items.sublist(start, end);
       await _channel.invokeMethod<void>('indexBooks', {
         'reset': reset,
