@@ -2,16 +2,6 @@ name: iOS simulator smoke test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - chatgpt/ios-stability-20260623
-    paths:
-      - '.github/workflows/ios-simulator-smoke.yml'
-      - 'ios/**'
-      - 'lib/**'
-      - 'assets/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
 
 permissions:
   contents: read
@@ -118,5 +108,3 @@ jobs:
             build/ios/simulator-artifact/${{ env.SIMULATOR_ARTIFACT_NAME }}.zip.sha256
             build/ios/simulator-artifact/otzaria-simulator-screenshot.png
             build/ios/simulator-artifact/simulator-last-5m.log
-          if-no-files-found: warn
-          retention-days: 14
