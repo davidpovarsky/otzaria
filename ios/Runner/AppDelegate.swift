@@ -187,28 +187,43 @@ import CoreSpotlight
       return nil
     }
 
-    let subtitle = rawItem["subtitle"] as? String
-    let author = rawItem["author"] as? String
+    let subtitle = Self.cleanMetadataText(rawItem["subtitle"] as? String)
+    let author = Self.cleanMetadataText(rawItem["author"] as? String)
     let keywords = rawItem["keywords"] as? [String]
     let kind = rawItem["kind"] as? String
 
     let attributeSet = CSSearchableItemAttributeSet(itemContentType: "public.text")
     attributeSet.title = title
     attributeSet.displayName = title
-    attributeSet.contentDescription = subtitle
-    attributeSet.authorNames = author.flatMap { $0.isEmpty ? nil : [$0] }
+    attributeSet.contentDescription = Self.joinMetadataLines([
+      subtitle,
+      author.map { "מחבר: \($0)" }
+    ])
+    attributeSet.authorNames = author.map { [$0] }
     attributeSet.keywords = keywords
     attributeSet.kind = kind == "pdf" ? "PDF" : "Book"
-
-    if let subtitle = subtitle, !subtitle.isEmpty {
-      attributeSet.namedLocation = subtitle
-    }
 
     return CSSearchableItem(
       uniqueIdentifier: uniqueIdentifier,
       domainIdentifier: Self.spotlightDomainIdentifier,
       attributeSet: attributeSet
     )
+  }
+
+  private static func cleanMetadataText(_ value: String?) -> String? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !value.isEmpty else {
+      return nil
+    }
+    return value
+  }
+
+  private static func joinMetadataLines(_ values: [String?]) -> String? {
+    let lines = values.compactMap { cleanMetadataText($0) }
+    guard !lines.isEmpty else {
+      return nil
+    }
+    return lines.joined(separator: "\n")
   }
 
   @discardableResult
