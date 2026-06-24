@@ -1,4 +1,4 @@
-# trigger spotlight db fallback build
+# trigger spotlight metadata display build
 name: Build unsigned iOS IPA
 
 on:
