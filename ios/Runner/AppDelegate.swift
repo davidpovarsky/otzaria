@@ -195,10 +195,8 @@ import CoreSpotlight
     let attributeSet = CSSearchableItemAttributeSet(itemContentType: "public.text")
     attributeSet.title = title
     attributeSet.displayName = title
-    attributeSet.contentDescription = Self.joinMetadataLines([
-      subtitle,
-      author.map { "מחבר: \($0)" }
-    ])
+    attributeSet.contentDescription = subtitle
+    attributeSet.namedLocation = author
     attributeSet.authorNames = author.map { [$0] }
     attributeSet.keywords = keywords
     attributeSet.kind = kind == "pdf" ? "PDF" : "Book"
@@ -216,14 +214,6 @@ import CoreSpotlight
       return nil
     }
     return value
-  }
-
-  private static func joinMetadataLines(_ values: [String?]) -> String? {
-    let lines = values.compactMap { cleanMetadataText($0) }
-    guard !lines.isEmpty else {
-      return nil
-    }
-    return lines.joined(separator: "\n")
   }
 
   @discardableResult
