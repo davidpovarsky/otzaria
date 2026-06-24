@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/core/ios_spotlight_indexer.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
@@ -33,7 +35,11 @@ class _SpotlightSettingsTabState extends State<SpotlightSettingsTab> {
   @override
   void initState() {
     super.initState();
-    _loadCurrentLibraryItems();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadCurrentLibraryItems();
+      }
+    });
   }
 
   @override
@@ -59,7 +65,8 @@ class _SpotlightSettingsTabState extends State<SpotlightSettingsTab> {
     });
 
     try {
-      final library = await DataRepository.instance.library;
+      final blocLibrary = context.read<LibraryBloc>().state.library;
+      final library = blocLibrary ?? await DataRepository.instance.library;
       final seen = <String>{};
       final items = <_SpotlightUiItem>[];
       for (final book in library.getAllBooks()) {
@@ -112,7 +119,8 @@ class _SpotlightSettingsTabState extends State<SpotlightSettingsTab> {
     });
 
     try {
-      final library = await DataRepository.instance.library;
+      final blocLibrary = context.read<LibraryBloc>().state.library;
+      final library = blocLibrary ?? await DataRepository.instance.library;
       await IOSSpotlightIndexer.instance.indexLibrary(library);
       if (!mounted) return;
       setState(() {
@@ -248,7 +256,7 @@ class _SpotlightSettingsTabState extends State<SpotlightSettingsTab> {
                   ),
               ],
             ),
-            kSettingsCardSpacing,
+            const SizedBox(height: 16),
             SettingsCard(
               title: 'פריטים לאינדוקס',
               subtitle: '${filteredItems.length} מתוך ${_items.length} פריטים',
