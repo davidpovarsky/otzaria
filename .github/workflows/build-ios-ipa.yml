@@ -1,4 +1,4 @@
-# trigger spotlight metadata display build
+# trigger spotlight settings ui build
 name: Build unsigned iOS IPA
 
 on:
