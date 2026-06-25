@@ -1,6 +1,7 @@
 import UIKit
 import Flutter
 import CoreSpotlight
+import AppIntents
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -13,6 +14,10 @@ import CoreSpotlight
   private static let spotlightIndexBooksMethod = "indexBooks"
   private static let spotlightDomainIdentifier = "otzaria.books"
 
+  private static let appStateChannelName = "otzaria/app_state"
+  private static let appStateUpdateSnapshotMethod = "updateSnapshot"
+  static let appStateDefaultsKey = "otzaria.currentStateSnapshot"
+
   private var externalActivationChannel: FlutterMethodChannel?
   private var pendingExternalActivationUris: [String] = []
   private var isExternalActivationChannelReady = false
@@ -24,6 +29,7 @@ import CoreSpotlight
     GeneratedPluginRegistrant.register(with: self)
     configureExternalActivationChannel()
     configureSpotlightChannel()
+    configureAppStateChannel()
 
     if let launchUrl = launchOptions?[.url] as? URL {
       enqueueExternalActivation(url: launchUrl)
@@ -128,6 +134,50 @@ import CoreSpotlight
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  private func configureAppStateChannel() {
+    guard
+      let controller = window?.rootViewController as? FlutterViewController
+    else {
+      return
+    }
+
+    let channel = FlutterMethodChannel(
+      name: Self.appStateChannelName,
+      binaryMessenger: controller.binaryMessenger
+    )
+
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case Self.appStateUpdateSnapshotMethod:
+        guard let snapshot = call.arguments as? [String: Any] else {
+          result(FlutterError(
+            code: "INVALID_ARGUMENTS",
+            message: "Expected app state snapshot",
+            details: nil
+          ))
+          return
+        }
+        Self.saveAppStateSnapshot(snapshot)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private static func saveAppStateSnapshot(_ snapshot: [String: Any]) {
+    var payload = snapshot
+    payload["nativeSavedAt"] = ISO8601DateFormatter().string(from: Date())
+
+    guard JSONSerialization.isValidJSONObject(payload),
+          let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+          let jsonString = String(data: data, encoding: .utf8) else {
+      return
+    }
+
+    UserDefaults.standard.set(jsonString, forKey: appStateDefaultsKey)
   }
 
   private func handleSpotlightIndexBooks(
@@ -236,5 +286,32 @@ import CoreSpotlight
       arguments: uriString
     )
     return true
+  }
+}
+
+@available(iOS 16.0, *)
+struct GetOtzariaStateIntent: AppIntent {
+  static var title: LocalizedStringResource = "Get Otzaria State"
+  static var description = IntentDescription("Returns the latest screen and open tab state from Otzaria.")
+  static var openAppWhenRun: Bool = false
+
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let json = UserDefaults.standard.string(forKey: AppDelegate.appStateDefaultsKey) ?? "{}"
+    return .result(value: json)
+  }
+}
+
+@available(iOS 16.0, *)
+struct OtzariaShortcutsProvider: AppShortcutsProvider {
+  static var appShortcuts: [AppShortcut] {
+    AppShortcut(
+      intent: GetOtzariaStateIntent(),
+      phrases: [
+        "Get \\(.applicationName) state",
+        "What is open in \\(.applicationName)"
+      ],
+      shortTitle: "Get State",
+      systemImageName: "book"
+    )
   }
 }
