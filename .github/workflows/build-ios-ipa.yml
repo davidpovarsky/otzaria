@@ -1,4 +1,4 @@
-# trigger spotlight author field and reader nav auto-hide build
+# trigger spotlight author field build
 name: Build unsigned iOS IPA
 
 on:
