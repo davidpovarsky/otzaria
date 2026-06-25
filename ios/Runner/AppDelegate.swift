@@ -376,6 +376,14 @@ struct OpenOtzariaScreenIntent: AppIntent {
 
   @Parameter(title: "Screen") var screen: OtzariaScreenOption
 
+  init() {
+    self.screen = .library
+  }
+
+  init(screen: OtzariaScreenOption) {
+    self.screen = screen
+  }
+
   func perform() async throws -> some IntentResult {
     AppDelegate.queueShortcutURL(AppDelegate.makeOpenURL(path: screen.path))
     return .result()
@@ -389,6 +397,14 @@ struct OpenOtzariaSearchIntent: AppIntent {
   static var openAppWhenRun: Bool = true
 
   @Parameter(title: "Query") var query: String
+
+  init() {
+    self.query = ""
+  }
+
+  init(query: String) {
+    self.query = query
+  }
 
   func perform() async throws -> some IntentResult {
     AppDelegate.queueShortcutURL(
@@ -408,6 +424,14 @@ struct OpenOtzariaRefIntent: AppIntent {
   static var openAppWhenRun: Bool = true
 
   @Parameter(title: "Reference") var reference: String
+
+  init() {
+    self.reference = ""
+  }
+
+  init(reference: String) {
+    self.reference = reference
+  }
 
   func perform() async throws -> some IntentResult {
     AppDelegate.queueShortcutURL(
@@ -512,64 +536,62 @@ struct SearchOtzariaBooksIntent: AppIntent {
 @available(iOS 16.0, *)
 struct OtzariaShortcutsProvider: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
-    [
-      AppShortcut(
-        intent: GetOtzariaStateIntent(),
-        phrases: [
-          "Get \(.applicationName) state",
-          "What is open in \(.applicationName)"
-        ],
-        shortTitle: "Get State",
-        systemImageName: "book"
-      ),
-      AppShortcut(
-        intent: OpenOtzariaScreenIntent(),
-        phrases: [
-          "Open \(.applicationName) screen"
-        ],
-        shortTitle: "Open Screen",
-        systemImageName: "rectangle.grid.2x2"
-      ),
-      AppShortcut(
-        intent: OpenOtzariaSearchIntent(),
-        phrases: [
-          "Search in \(.applicationName)"
-        ],
-        shortTitle: "Search",
-        systemImageName: "magnifyingglass"
-      ),
-      AppShortcut(
-        intent: OpenOtzariaRefIntent(),
-        phrases: [
-          "Open reference in \(.applicationName)"
-        ],
-        shortTitle: "Open Ref",
-        systemImageName: "text.book.closed"
-      ),
-      AppShortcut(
-        intent: GetCurrentOtzariaBookIntent(),
-        phrases: [
-          "Get current book in \(.applicationName)"
-        ],
-        shortTitle: "Current Book",
-        systemImageName: "book.closed"
-      ),
-      AppShortcut(
-        intent: GetOpenOtzariaTabsIntent(),
-        phrases: [
-          "Get open tabs in \(.applicationName)"
-        ],
-        shortTitle: "Open Tabs",
-        systemImageName: "square.on.square"
-      ),
-      AppShortcut(
-        intent: SearchOtzariaBooksIntent(),
-        phrases: [
-          "Search books in \(.applicationName)"
-        ],
-        shortTitle: "Search Books",
-        systemImageName: "books.vertical"
-      )
-    ]
+    AppShortcut(
+      intent: GetOtzariaStateIntent(),
+      phrases: [
+        "Get \(.applicationName) state",
+        "What is open in \(.applicationName)"
+      ],
+      shortTitle: "Get State",
+      systemImageName: "book"
+    )
+    AppShortcut(
+      intent: OpenOtzariaScreenIntent(),
+      phrases: [
+        "Open \(.applicationName) screen"
+      ],
+      shortTitle: "Open Screen",
+      systemImageName: "rectangle.grid.2x2"
+    )
+    AppShortcut(
+      intent: OpenOtzariaSearchIntent(),
+      phrases: [
+        "Search in \(.applicationName)"
+      ],
+      shortTitle: "Search",
+      systemImageName: "magnifyingglass"
+    )
+    AppShortcut(
+      intent: OpenOtzariaRefIntent(),
+      phrases: [
+        "Open reference in \(.applicationName)"
+      ],
+      shortTitle: "Open Ref",
+      systemImageName: "text.book.closed"
+    )
+    AppShortcut(
+      intent: GetCurrentOtzariaBookIntent(),
+      phrases: [
+        "Get current book in \(.applicationName)"
+      ],
+      shortTitle: "Current Book",
+      systemImageName: "book.closed"
+    )
+    AppShortcut(
+      intent: GetOpenOtzariaTabsIntent(),
+      phrases: [
+        "Get open tabs in \(.applicationName)"
+      ],
+      shortTitle: "Open Tabs",
+      systemImageName: "square.on.square"
+    )
+    AppShortcut(
+      intent: SearchOtzariaBooksIntent(),
+      phrases: [
+        "Search books in \(.applicationName)"
+      ],
+      shortTitle: "Search Books",
+      systemImageName: "books.vertical"
+    )
   }
 }
