@@ -12,11 +12,12 @@ import AppIntents
 
   private static let spotlightChannelName = "otzaria/spotlight"
   private static let spotlightIndexBooksMethod = "indexBooks"
-  private static let spotlightDomainIdentifier = "otzaria.books"
+  static let spotlightDomainIdentifier = "otzaria.books"
 
   private static let appStateChannelName = "otzaria/app_state"
   private static let appStateUpdateSnapshotMethod = "updateSnapshot"
   static let appStateDefaultsKey = "otzaria.currentStateSnapshot"
+  static let pendingShortcutURLDefaultsKey = "otzaria.pendingShortcutURL"
 
   private var externalActivationChannel: FlutterMethodChannel?
   private var pendingExternalActivationUris: [String] = []
@@ -34,8 +35,14 @@ import AppIntents
     if let launchUrl = launchOptions?[.url] as? URL {
       enqueueExternalActivation(url: launchUrl)
     }
+    drainPendingShortcutActivation()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    drainPendingShortcutActivation()
   }
 
   override func application(
@@ -63,6 +70,47 @@ import AppIntents
       continue: userActivity,
       restorationHandler: restorationHandler
     )
+  }
+
+  static func makeOpenURL(path: String, queryItems: [URLQueryItem] = []) -> URL {
+    var components = URLComponents()
+    components.scheme = "otzaria"
+    components.host = "open"
+    components.path = path
+    components.queryItems = queryItems.isEmpty ? nil : queryItems
+    return components.url!
+  }
+
+  static func queueShortcutURL(_ url: URL) {
+    UserDefaults.standard.set(url.absoluteString, forKey: pendingShortcutURLDefaultsKey)
+  }
+
+  static func loadAppStateSnapshot() -> [String: Any] {
+    guard let jsonString = UserDefaults.standard.string(forKey: appStateDefaultsKey),
+          let data = jsonString.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data),
+          let dictionary = object as? [String: Any] else {
+      return [:]
+    }
+    return dictionary
+  }
+
+  static func jsonString(from object: Any) -> String {
+    guard JSONSerialization.isValidJSONObject(object),
+          let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+          let json = String(data: data, encoding: .utf8) else {
+      return "{}"
+    }
+    return json
+  }
+
+  private func drainPendingShortcutActivation() {
+    guard let uriString = UserDefaults.standard.string(forKey: Self.pendingShortcutURLDefaultsKey),
+          let url = URL(string: uriString) else {
+      return
+    }
+    UserDefaults.standard.removeObject(forKey: Self.pendingShortcutURLDefaultsKey)
+    enqueueExternalActivation(url: url)
   }
 
   private func configureExternalActivationChannel() {
@@ -284,6 +332,31 @@ import AppIntents
 }
 
 @available(iOS 16.0, *)
+enum OtzariaScreenOption: String, AppEnum {
+  case library
+  case search
+  case tools
+  case settings
+
+  static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Otzaria Screen")
+  static var caseDisplayRepresentations: [OtzariaScreenOption: DisplayRepresentation] = [
+    .library: "Library",
+    .search: "Search",
+    .tools: "Tools",
+    .settings: "Settings"
+  ]
+
+  var path: String {
+    switch self {
+    case .library: return "/library"
+    case .search: return "/search"
+    case .tools: return "/tools"
+    case .settings: return "/settings"
+    }
+  }
+}
+
+@available(iOS 16.0, *)
 struct GetOtzariaStateIntent: AppIntent {
   static var title: LocalizedStringResource = "Get Otzaria State"
   static var description = IntentDescription("Returns the latest screen and open tab state from Otzaria.")
@@ -296,16 +369,207 @@ struct GetOtzariaStateIntent: AppIntent {
 }
 
 @available(iOS 16.0, *)
+struct OpenOtzariaScreenIntent: AppIntent {
+  static var title: LocalizedStringResource = "Open Otzaria Screen"
+  static var description = IntentDescription("Opens a top-level screen in Otzaria.")
+  static var openAppWhenRun: Bool = true
+
+  @Parameter(title: "Screen") var screen: OtzariaScreenOption
+
+  func perform() async throws -> some IntentResult {
+    AppDelegate.queueShortcutURL(AppDelegate.makeOpenURL(path: screen.path))
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct OpenOtzariaSearchIntent: AppIntent {
+  static var title: LocalizedStringResource = "Open Otzaria Search"
+  static var description = IntentDescription("Opens Otzaria search with a query.")
+  static var openAppWhenRun: Bool = true
+
+  @Parameter(title: "Query") var query: String
+
+  func perform() async throws -> some IntentResult {
+    AppDelegate.queueShortcutURL(
+      AppDelegate.makeOpenURL(
+        path: "/search",
+        queryItems: [URLQueryItem(name: "q", value: query)]
+      )
+    )
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct OpenOtzariaRefIntent: AppIntent {
+  static var title: LocalizedStringResource = "Open Otzaria Ref"
+  static var description = IntentDescription("Opens Otzaria source detection with a reference query.")
+  static var openAppWhenRun: Bool = true
+
+  @Parameter(title: "Reference") var reference: String
+
+  func perform() async throws -> some IntentResult {
+    AppDelegate.queueShortcutURL(
+      AppDelegate.makeOpenURL(
+        path: "/detection",
+        queryItems: [URLQueryItem(name: "q", value: reference)]
+      )
+    )
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct GetCurrentOtzariaBookIntent: AppIntent {
+  static var title: LocalizedStringResource = "Get Current Otzaria Book"
+  static var description = IntentDescription("Returns the current open book or tab title from Otzaria.")
+  static var openAppWhenRun: Bool = false
+
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let snapshot = AppDelegate.loadAppStateSnapshot()
+    let title = snapshot["currentTabTitle"] as? String ?? ""
+    return .result(value: title)
+  }
+}
+
+@available(iOS 16.0, *)
+struct GetOpenOtzariaTabsIntent: AppIntent {
+  static var title: LocalizedStringResource = "Get Open Otzaria Tabs"
+  static var description = IntentDescription("Returns the open Otzaria tab titles as JSON.")
+  static var openAppWhenRun: Bool = false
+
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let snapshot = AppDelegate.loadAppStateSnapshot()
+    let titles = snapshot["openTabsTitles"] as? [String] ?? []
+    return .result(value: AppDelegate.jsonString(from: titles))
+  }
+}
+
+@available(iOS 16.0, *)
+struct SearchOtzariaBooksIntent: AppIntent {
+  static var title: LocalizedStringResource = "Search Otzaria Books"
+  static var description = IntentDescription("Searches indexed Otzaria books and returns matching items as JSON.")
+  static var openAppWhenRun: Bool = false
+
+  @Parameter(title: "Query") var query: String
+  @Parameter(title: "Limit") var limit: Int
+
+  init() {
+    self.query = ""
+    self.limit = 10
+  }
+
+  init(query: String, limit: Int = 10) {
+    self.query = query
+    self.limit = limit
+  }
+
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    let results = await Self.searchBooks(query: query, limit: limit)
+    return .result(value: AppDelegate.jsonString(from: results))
+  }
+
+  private static func searchBooks(query rawQuery: String, limit rawLimit: Int) async -> [[String: String]] {
+    let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return [] }
+
+    let limit = min(max(rawLimit, 1), 50)
+    let escaped = trimmed
+      .replacingOccurrences(of: "\\", with: "\\\\")
+      .replacingOccurrences(of: "\"", with: "\\\"")
+    let queryString = "title == \"*\(escaped)*\"cd || contentDescription == \"*\(escaped)*\"cd || namedLocation == \"*\(escaped)*\"cd"
+
+    return await withCheckedContinuation { continuation in
+      var results: [[String: String]] = []
+      let searchQuery = CSSearchQuery(
+        queryString: queryString,
+        attributes: ["title", "contentDescription", "namedLocation", "kind"]
+      )
+
+      searchQuery.foundItemsHandler = { items in
+        for item in items where results.count < limit {
+          guard item.domainIdentifier == AppDelegate.spotlightDomainIdentifier else { continue }
+          let attributes = item.attributeSet
+          results.append([
+            "title": attributes.title ?? "",
+            "path": attributes.contentDescription ?? "",
+            "author": attributes.namedLocation ?? "",
+            "kind": attributes.kind ?? "",
+            "deepLink": item.uniqueIdentifier
+          ])
+        }
+      }
+
+      searchQuery.completionHandler = { _ in
+        continuation.resume(returning: results)
+      }
+      searchQuery.start()
+    }
+  }
+}
+
+@available(iOS 16.0, *)
 struct OtzariaShortcutsProvider: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
-    AppShortcut(
-      intent: GetOtzariaStateIntent(),
-      phrases: [
-        "Get \(.applicationName) state",
-        "What is open in \(.applicationName)"
-      ],
-      shortTitle: "Get State",
-      systemImageName: "book"
-    )
+    [
+      AppShortcut(
+        intent: GetOtzariaStateIntent(),
+        phrases: [
+          "Get \(.applicationName) state",
+          "What is open in \(.applicationName)"
+        ],
+        shortTitle: "Get State",
+        systemImageName: "book"
+      ),
+      AppShortcut(
+        intent: OpenOtzariaScreenIntent(),
+        phrases: [
+          "Open \(.applicationName) screen"
+        ],
+        shortTitle: "Open Screen",
+        systemImageName: "rectangle.grid.2x2"
+      ),
+      AppShortcut(
+        intent: OpenOtzariaSearchIntent(),
+        phrases: [
+          "Search in \(.applicationName)"
+        ],
+        shortTitle: "Search",
+        systemImageName: "magnifyingglass"
+      ),
+      AppShortcut(
+        intent: OpenOtzariaRefIntent(),
+        phrases: [
+          "Open reference in \(.applicationName)"
+        ],
+        shortTitle: "Open Ref",
+        systemImageName: "text.book.closed"
+      ),
+      AppShortcut(
+        intent: GetCurrentOtzariaBookIntent(),
+        phrases: [
+          "Get current book in \(.applicationName)"
+        ],
+        shortTitle: "Current Book",
+        systemImageName: "book.closed"
+      ),
+      AppShortcut(
+        intent: GetOpenOtzariaTabsIntent(),
+        phrases: [
+          "Get open tabs in \(.applicationName)"
+        ],
+        shortTitle: "Open Tabs",
+        systemImageName: "square.on.square"
+      ),
+      AppShortcut(
+        intent: SearchOtzariaBooksIntent(),
+        phrases: [
+          "Search books in \(.applicationName)"
+        ],
+        shortTitle: "Search Books",
+        systemImageName: "books.vertical"
+      )
+    ]
   }
 }
