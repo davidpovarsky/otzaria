@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - chatgpt/ios-stability-20260623
+      - local-appintent-search-extension
     paths:
       - '.github/workflows/build-ios-ipa.yml'
 
