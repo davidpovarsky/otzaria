@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:isolate';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:fuzzywuzzy/fuzzywuzzy.dart';
+import 'package:otzaria/core/ios_spotlight_indexer.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -61,7 +63,15 @@ class DataRepository {
   /// Returns a [Future] that completes with a [Library] object containing
   /// the full library structure and metadata
   Future<Library> _getLibrary() async {
-    return _fileSystemData.getLibrary();
+    final library = await _fileSystemData.getLibrary();
+    unawaited(
+      IOSSpotlightIndexer.instance.indexLibrary(library).catchError(
+        (Object error) {
+          debugPrint('Spotlight indexing failed: $error');
+        },
+      ),
+    );
+    return library;
   }
 
   /// Retrieves the list of books from the Otzar HaHochma project
@@ -462,7 +472,7 @@ bool _wordPairMatches(String queryWord, String textWord) {
 
   final allowed = _maxAllowedEdits(
       queryWord.length > textWord.length ? queryWord.length : textWord.length);
-  // שוויון מלא כבר כוסה ע"י contains
+  // שוויון מלא כבר כוסה ע״י contains
   if (allowed == 0) return false;
   // הפרש האורכים הוא חסם תחתון למרחק העריכה
   if ((textWord.length - queryWord.length).abs() > allowed) return false;

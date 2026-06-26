@@ -1,0 +1,83 @@
+# trigger spotlight shortcuts author field build
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chatgpt/ios-stability-20260623
+    paths:
+      - '.github/workflows/build-ios-ipa.yml'
+
+permissions:
+  contents: read
+
+env:
+  IPA_NAME: Otzaria-unsigned
+  ALTSTORE_DISPLAY_NAME: Otzaria
+
+jobs:
+  build-ios-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          dart --version
+          xcodebuild -version
+          pod --version
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+     
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          pod install
+
+      - name: Build iOS app without code signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Normalize app metadata for sideloading
+        run: |
+          set -euo pipefail
+          APP_PLIST="build/ios/iphoneos/Runner.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${ALTSTORE_DISPLAY_NAME}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName ${ALTSTORE_DISPLAY_NAME}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PLIST"
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+          ditto build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          cd build/ios/ipa
+          zip -qry "${IPA_NAME}.ipa" Payload
+          unzip -tq "${IPA_NAME}.ipa"
+          zipinfo -1 "${IPA_NAME}.ipa" | head -20
+          ls -lh "${IPA_NAME}.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IPA_NAME }}
+          path: build/ios/ipa/${{ env.IPA_NAME }}.ipa
+          if-no-files-found: error
+          retention-days: 14
