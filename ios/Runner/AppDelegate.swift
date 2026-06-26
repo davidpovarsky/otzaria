@@ -16,6 +16,8 @@ import AppIntents
 
   private static let appStateChannelName = "otzaria/app_state"
   private static let appStateUpdateSnapshotMethod = "updateSnapshot"
+  private static let appStateWriteAppGroupProbeMethod = "writeAppGroupProbe"
+  private static let appStateReadAppGroupProbeMethod = "readAppGroupProbe"
   static let appStateDefaultsKey = "otzaria.currentStateSnapshot"
   static let pendingShortcutURLDefaultsKey = "otzaria.pendingShortcutURL"
 
@@ -31,6 +33,7 @@ import AppIntents
     configureExternalActivationChannel()
     configureSpotlightChannel()
     configureAppStateChannel()
+    OtzariaAppGroup.writeProbe(source: "Runner")
 
     if let launchUrl = launchOptions?[.url] as? URL {
       enqueueExternalActivation(url: launchUrl)
@@ -203,6 +206,11 @@ import AppIntents
         }
         Self.saveAppStateSnapshot(snapshot)
         result(nil)
+      case Self.appStateWriteAppGroupProbeMethod:
+        let source = (call.arguments as? [String: Any])?["source"] as? String ?? "Runner"
+        result(OtzariaAppGroup.writeProbe(source: source))
+      case Self.appStateReadAppGroupProbeMethod:
+        result(OtzariaAppGroup.readProbe() ?? "")
       default:
         result(FlutterMethodNotImplemented)
       }
