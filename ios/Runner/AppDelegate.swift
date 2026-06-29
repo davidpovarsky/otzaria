@@ -33,7 +33,6 @@ import AppIntents
     configureExternalActivationChannel()
     configureSpotlightChannel()
     configureAppStateChannel()
-    OtzariaAppGroup.writeProbe(source: "Runner")
 
     if let launchUrl = launchOptions?[.url] as? URL {
       enqueueExternalActivation(url: launchUrl)
