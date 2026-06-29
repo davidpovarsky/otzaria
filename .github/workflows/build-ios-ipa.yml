@@ -1,4 +1,4 @@
-# trigger spotlight shortcuts author field build
+# trigger  shortcuts author field build
 name: Build unsigned iOS IPA
 
 on:
