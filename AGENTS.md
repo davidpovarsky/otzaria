@@ -1,595 +1,303 @@
-# AI Agent Guidelines for Otzaria
-
-## CRITICAL: Communication Language
-**ALWAYS respond in Hebrew!** This includes:
-- All answers and explanations
-- Your thinking process
-- Error messages and debugging info
-- Only code/comments can be in English when appropriate
-
-## Mandatory Workflow
-1. **Plan** - Create detailed action plan before execution
-2. **Execute** - Step by step until completion
-3. **Validate** - Run `flutter analyze` after EVERY change
-4. **Fix ALL errors before proceeding to next step**
-5. **Never skip validation - errors compound quickly!**
-
-## Bug Fix Workflow (MANDATORY)
-
-**Primary rule: Investigate first, ask only if you truly must.**
-
-Before writing any fix, perform the following steps **on your own** without asking the user:
-
-1. **Understand the symptom** - What did the user report? If critical details are missing that are needed to *execute* the fix (not to analyze) - ask everything **in a single message**.
-2. **Investigate git** - Run `git log --oneline -20` and check commits that touched relevant code.
-3. **Read the code** - Read the code before proposing any fix. Don't assume, know.
-4. **Identify the root cause** - If found, explain to the user what caused the bug before fixing it.
-
-### Decision Tree
-
-```
-User reports bug
-       │
-       ▼
-  Investigate first:
-  git log + read code
-       │
-       ▼
- Root cause found?
-   ┌───┴───┐
-  YES      NO
-   │           │
-   ▼           ▼
-Apply MINIMAL  Ask user ONE message
-fix & explain  with ALL missing info
-               then investigate again
-```
-
-### Fix Philosophy - CRITICAL
-
-**Bug fix ≠ adding code!**
-
-- **FIRST** - try to **remove** or **revert** code that caused the bug
-- **SECOND** - try to **change** existing logic minimally
-- **LAST RESORT** - add new code, only if truly necessary
-- Adding more code to work around a bug = introducing future bugs
-
-### Red Flags - Stop and Ask
-
-If you find yourself about to:
-- Add a `try/catch` to silence an error → find out *why* the error occurs first
-- Add a null check that "shouldn't be needed" → find out *why* it's null
-- Add a workaround flag/boolean → reconsider the root cause
-- Write more than ~15 lines to fix a single bug → something is wrong, reassess
-
-## Architecture
-
-### Design Patterns
-- **BLoC Pattern** - State management (every feature needs: bloc/event/state)
-- **Repository Pattern** - Separates data access from business logic
-- **Provider** - For dependency injection across the app
-
-### Feature Structure (MUST follow)
-```
-lib/feature_name/
-├── bloc/
-│   ├── feature_bloc.dart      # Business logic
-│   ├── feature_event.dart     # User actions/events
-│   └── feature_state.dart     # UI states
-├── models/
-│   └── feature_model.dart     # Data models
-├── repository/
-│   └── feature_repository.dart # Data layer
-└── view/
-    ├── feature_screen.dart    # Main screen
-    └── widgets/               # Feature-specific widgets
-```
-
-### Key Code Locations
-```
-lib/
-├── data/repository/
-│   └── books_repository.dart          # Central books management
-├── models/
-│   ├── books.dart                     # Book model (title, path, etc)
-│   └── app_model.dart                 # Main app state
-├── widgets/
-│   ├── rtl_text_field.dart           # RTL text input (USE THIS!)
-│   └── [other shared widgets]
-├── core/
-│   └── scaffold_messenger.dart        # UiSnack for messages
-├── search/
-│   ├── bloc/                          # Search state management
-│   └── search_repository.dart         # Search engine
-├── settings/
-│   ├── settings_repository.dart       # App settings
-│   └── bloc/
-├── bookmarks/repository/              # Bookmarks system
-├── history/                           # Reading history
-├── personal_notes/                    # User notes feature
-├── pdf_book/                          # PDF viewer screens
-├── text_book/                         # Text viewer screens
-└── utils/
-    └── open_book.dart                 # Book opening logic
-```
-
-
-## MANDATORY UI Components
-
-### 1. Icons - ONLY from `fluentui_system_icons`, rendered via `RtlIcon`
-```dart
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
-
-// CORRECT — always wrap with RtlIcon:
-RtlIcon(FluentIcons.search_24_regular)
-RtlIcon(FluentIcons.book_24_filled)
-RtlIcon(FluentIcons.arrow_left_24_regular)   // auto-mirrors to arrow_right in RTL
-
-// WRONG — bare Icon() ignores RTL:
-// Icon(FluentIcons.arrow_left_24_regular)   ❌
-```
-**Never use:**
-- Material Icons
-- Cupertino Icons
-- Custom icon fonts
-- Random icon packages
-- Bare `Icon(...)` where directionality matters — use `RtlIcon` instead
-- `mirrorIcon` parameter on any widget — **FORBIDDEN**, removed in commit 3b4d357. RTL mirroring is handled automatically by `RtlIcon`.
-- Manual `Transform.scale(scaleX: -1, ...)` or `Transform.flip(flipX: true, ...)` around icons
-
-**Why `RtlIcon`:** reads `Directionality` from context and automatically swaps directional icons (arrows/chevrons) via a lookup table, geometrically flips book-family icons without an RTL variant, and leaves symmetric icons untouched.
-
-### 2. User Messages - ONLY via `UiSnack`
-```dart
-import 'package:otzaria/core/scaffold_messenger.dart';
-
-UiSnack.show('הפעולה בוצעה');              // Success
-UiSnack.showError('שגיאה בביצוע');         // Error
-UiSnack.show(UiSnack.textCopied);          // Pre-defined message
-```
-**Never use:**
-- `ScaffoldMessenger.of(context).showSnackBar()`
-- Custom snackbar widgets
-- Toast packages
-- Alert dialogs for simple messages
-
-### 3. Text Input - ONLY `RtlTextField`
-```dart
-import 'package:otzaria/widgets/rtl_text_field.dart';
-
-RtlTextField(
-  controller: _controller,
-  decoration: InputDecoration(labelText: 'חיפוש'),
-  onSubmitted: (value) => _handleSearch(),
-  autofocus: true,
-)
-```
-**NEVER use regular `TextField`** - it breaks RTL support!
-
-### 4. Dialogs - ONLY from `custom_ui_components`
-```dart
-import 'package:otzaria/widgets/widgets_exports.dart';
-
-// Single button dialog (confirm only)
-showSingleActionDialog(
-  context: context,
-  title: 'כותרת',
-  content: 'תוכן הדיאלוג',
-  confirmText: 'אישור',
-);
-
-// Two-button dialog (cancel + confirm)
-showTwoActionsDialog(
-  context: context,
-  title: 'כותרת',
-  content: 'תוכן הדיאלוג',
-  cancelText: 'ביטול',
-  confirmText: 'אישור',
-);
-
-// Warning dialog (user should ideally cancel)
-showWarningDialog(
-  context: context,
-  title: 'אזהרה',
-  content: 'פעולה זו היא סופית',
-  subtitle: 'שים לב שלא ניתן לבטל פעולה זו',  // red text
-  cancelText: 'ביטול',
-  confirmText: 'המשך',
-);
-```
-
-**Dialog Styling Rules (CRITICAL):**
-- **SingleActionDialog**: single button - FilledButton (primary/onPrimary)
-- **TwoActionsDialog**: 
-  - Cancel = FilledButton.tonal (surfaceContainerHighest/onSurface)
-  - Confirm = FilledButton (primary/onPrimary)
-- **WarningDialog**: 
-  - Cancel = FilledButton (primary/onPrimary) - recommended (safe choice)
-  - Confirm = TextButton (transparent background, error text color) - dangerous
-  - Subtitle = error color (red)
-
-**Never use:**
-- `showDialog` with custom `AlertDialog` directly
-- Material `SimpleDialog`
-- Custom dialog widgets without the standard styling
-- Hardcoded colors (Colors.red, Colors.blue, etc.)
-
-### 5. Action Buttons - ONLY from `custom_ui_components`
-```dart
-import 'package:otzaria/widgets/widgets_exports.dart';
-
-// Recommended action button (Primary style)
-RecommendedActionButton(
-  text: 'שנה מיקום',
-  onPressed: () => _changeLocation(),
-  isLoading: false,  // optional - shows loading indicator
-);
-
-// Neutral/non-recommended action button (Tonal style)
-NeutralActionButton(
-  text: 'איפוס',
-  onPressed: () => _resetSettings(),
-  isLoading: false,  // optional - shows loading indicator
-);
-```
-
-**Button Styling Rules (CRITICAL):**
-- **RecommendedActionButton**: FilledButton (primary background, onPrimary text)
-- **NeutralActionButton**: FilledButton.tonal (surfaceContainerHighest background, onSurface text)
-- **NEVER use hardcoded colors** - always use `Theme.of(context).colorScheme`
-
-**When to use which button:**
-- `RecommendedActionButton` - recommended actions (change settings, choose location, update, add)
-- `NeutralActionButton` - neutral or dangerous actions (reset, delete, remove, stop)
-
-**Never use:**
-- `ElevatedButton`, `TextButton`, `OutlinedButton` directly
-- Custom button widgets without the standard styling
-- Material `IconButton` for primary actions
-- Hardcoded colors
-
-### 6. Settings Cards - ONLY `SettingsCard`
-```dart
-import 'package:otzaria/settings/settings_card.dart';
-
-SettingsCard(
-  title: 'כותרת הקטגוריה',
-  subtitle: 'תיאור אופציונלי',  // אופציונלי
-  children: [
-    ListTile(...),
-    // Divider is added automatically between items
-    SwitchListTile(...),
-  ],
-);
-```
-
-**Card Styling Rules:**
-- Title: titleMedium, bold, primary color
-- Subtitle: bodySmall, onSurfaceVariant color (optional)
-- Card: surface color, rounded corners (20), subtle border
-- Dividers: Automatic between children, surfaceContainerHighest color, thickness 1.5
-
-**Hover Effects:**
-- Remove hover from ListTile rows containing action buttons: `hoverColor: Colors.transparent`
-- Hover should ONLY appear on the action buttons themselves
-- This prevents double-hover effect and improves UX
-
-### 8. Color Overrides — FORBIDDEN outside `lib/theme/`
-
-**NEVER add the following anywhere outside `lib/theme/`:**
-- `hoverColor` on `InkWell` / `ListTile` / any widget (except `Colors.transparent` on ListTile with action buttons)
-- `splashColor` on any widget
-- `overlayColor` on any widget
-- `.withValues(alpha: ...)` — color transparency overrides
-
-**Why:** These were used to work around a dark-mode color bug (fixed in commit f938a1860 via `ColorScheme.fromSeed`). Now the theme computes all interaction colors correctly. Adding them manually breaks theme consistency and will break again when themes change.
-
-**If you need to define a custom interaction color or transparency:**
-→ Define it in `lib/theme/app_theme_data.dart` or `lib/theme/app_surfaces.dart`, not in feature files.
-
-**Exceptions (the only allowed uses outside `lib/theme/`):**
-- `hoverColor: Colors.transparent` on a `ListTile` that contains action buttons in its trailing/leading (prevents double-hover)
-- `BoxShadow` colors with `.withValues(alpha: ...)` — shadows require transparency by nature
-- Loading overlays / semi-transparent backgrounds that are structural (not interaction feedback)
-
-### 7. Segmented Settings - ONLY `SegmentedSettingsTile`
-```dart
-import 'package:otzaria/widgets/widgets_exports.dart';
-
-// Setting with 2-4 options
-SegmentedSettingsTile<String>(
-  icon: FluentIcons.text_font_info_24_regular,
-  title: 'הצגת הניקוד',
-  subtitle: 'הניקוד יוצג בכל הספרים',
-  options: const [
-    SegmentOption(value: 'always', label: 'הצג תמיד'),
-    SegmentOption(value: 'tanach_only', label: 'הצג בתנ"ך'),
-    SegmentOption(value: 'never', label: 'אל תציג'),
-  ],
-  currentValue: nikudDisplayMode,
-  onChanged: (value) {
-    // update BLoC
-  },
-);
-```
-
-**When to use SegmentedSettingsTile:**
-- Settings with 2-4 mutually exclusive options
-- When the user needs to pick exactly one value from a small set
-- Modern alternative to a RadioButton group or multiple SwitchListTiles
-
-**Styling:**
-- Selected: primary color with 20% opacity background
-- Unselected: card color background
-- Rounded corners (8)
-- Fits in single row within SettingsCard
-
-**Title can be:**
-- String - plain text
-- Widget - for advanced styling (e.g. RichText with mixed colors)
-
-**Never use:**
-- RadioButton groups for 2-4 options
-- Multiple SwitchListTile for mutually exclusive options
-- Custom segmented button implementations
-
-## Code Guidelines
-
-### RTL Support (Critical!)
-The app uses `locale: Locale("he", "IL")` + `GlobalWidgetsLocalizations.delegate` in `MaterialApp`.
-This sets `Directionality.rtl` **globally** for the entire widget tree — every `Text` inherits RTL automatically.
-
-**textDirection rule — Critical:**
-- **NEVER add** `textDirection: TextDirection.rtl` to `Text` — it is completely redundant.
-- **ADD** `textDirection: TextDirection.ltr` **only** for inherently LTR content:
-  - OS file / folder paths
-  - Email addresses
-  - Version numbers / hash values
-  - URLs
-  - Technical identifiers (clearly LTR format)
-- For parameters like `subtitleDirection` — pass `textDirection` to `Text` **only when the value is LTR**:
-  ```dart
-  // Correct:
-  textDirection: subtitleDirection == TextDirection.ltr ? TextDirection.ltr : null,
-  // Wrong — never pass TextDirection.rtl:
-  // textDirection: subtitleDirection,  // ❌ when the default is rtl
-  ```
-- Use `RtlTextField` for all text inputs
-- Test UI with Hebrew text before committing
-
-### BLoC Pattern Implementation
-```dart
-// 1. Events - User actions
-sealed class FeatureEvent extends Equatable {
-  const FeatureEvent();
-}
-
-class LoadDataEvent extends FeatureEvent {
-  const LoadDataEvent();
-  @override
-  List<Object> get props => [];
-}
-
-// 2. States - UI states
-sealed class FeatureState extends Equatable {
-  const FeatureState();
-}
-
-class InitialState extends FeatureState {
-  @override
-  List<Object> get props => [];
-}
-
-class LoadingState extends FeatureState {
-  @override
-  List<Object> get props => [];
-}
-
-class LoadedState extends FeatureState {
-  final Data data;
-  const LoadedState(this.data);
-  @override
-  List<Object> get props => [data];
-}
-
-// 3. Bloc - Logic
-class FeatureBloc extends Bloc<FeatureEvent, FeatureState> {
-  final FeatureRepository repository;
-  
-  FeatureBloc({required this.repository}) : super(InitialState()) {
-    on<LoadDataEvent>(_onLoadData);
-  }
-  
-  Future<void> _onLoadData(
-    LoadDataEvent event,
-    Emitter<FeatureState> emit,
-  ) async {
-    emit(LoadingState());
-    try {
-      final data = await repository.fetchData();
-      emit(LoadedState(data));
-    } catch (e) {
-      emit(ErrorState(e.toString()));
-      UiSnack.showError('שגיאה: ${e.toString()}');
-    }
-  }
-}
-```
-
-### Repository Pattern
-```dart
-class FeatureRepository {
-  final DataSource dataSource;  // Could be API, DB, file system
-  
-  FeatureRepository({required this.dataSource});
-  
-  Future<List<Item>> getItems() async {
-    try {
-      final rawData = await dataSource.fetch();
-      return rawData.map((e) => Item.fromJson(e)).toList();
-    } catch (e) {
-      throw RepositoryException('Failed to get items: $e');
-    }
-  }
-}
-```
-
-### Error Handling
-```dart
-try {
-  await riskyOperation();
-} catch (e, stackTrace) {
-  // Log for debugging
-  debugPrint('Error: $e\n$stackTrace');
-  
-  // Show user-friendly message
-  UiSnack.showError('אירעה שגיאה: ${e.toString()}');
-  
-  // Update state if needed
-  emit(ErrorState(e.toString()));
-}
-```
-
-### Documentation (Hebrew for public APIs)
-```dart
-/// Returns a list of books by category
-///
-/// [category] - the category name
-/// Returns [Future<List<Book>>] - list of books or error
-/// Throws [RepositoryException] if data not found
-Future<List<Book>> getBooksByCategory(String category) async {
-  // Implementation
-}
-```
-
-### Code Comments — Minimal & For the First-Time Reader (MANDATORY)
-
-**הכלל: פחות הערות, וקצרות. הוסף הערה רק כשהיא באמת נצרכת.**
-
-- **כמות** - אל תוסיף הרבה הערות. רוב הקוד צריך להסביר את עצמו דרך שמות ברורים.
-- **אורך** - הערה נצרכת תהיה קצרה - **מקסימום 2 שורות**.
-- **קהל היעד** - כתוב הערה רק למי שקורא את הקוד **בפעם הראשונה**. ההערה מסבירה *למה* הקוד עושה משהו לא מובן מאליו, או מתעדת מלכוד שאם ישנו אותו יחזור באג. זו ההצדקה היחידה להערה.
-- **לא רלוונטי** - אסור להערות שמתעדות היסטוריה: "פעם היה כך", "שונה ב-commit X", "הוספנו כי...", "TODO ישן", קוד מבוטל בהערה. למשתמש שקורא עכשיו לא מעניין מה היה - הגיט מתעד את זה.
-
-```dart
-// ❌ רע - מתעד היסטוריה, לא רלוונטי לקורא:
-// פעם השתמשנו ב-setFullScreen אבל זה איבד WS_VISIBLE אז שינינו
-
-// ✅ טוב - מזהיר ממלכוד שיחזיר באג אם ישונה (קצר):
-// setFullScreen על חלון מוסתר מאבד WS_VISIBLE - חובה להציג קודם
-```
-
-**אם נתקלת בהערה קיימת שמפרה את ההנחיה משמעותית** (ארוכה מדי, מתעדת היסטוריה, מיותרת) - **תקן/מחק אותה** כחלק מהעבודה על אותו קובץ.
-
-## Testing Strategy
-
-### Before Every Commit (MANDATORY)
-```bash
-flutter analyze              # Must pass with ZERO errors/warnings
-flutter test test/feature/   # Run ONLY tests related to your changes
-dart format lib/file.dart    # Format ONLY files you modified
-```
-
-> **Tip:** The project uses `dart_pre_commit` as a git pre-commit hook.
-> After cloning, run once: `dart run tool/install_git_hooks.dart`.
-> From that point, `dart format` and `dart analyze` run automatically on staged files
-> before every commit. Tests must still be run manually — they are not part of the hook.
-
-### When to Run Which Tests
-| Change Type | Tests to Run |
-|-------------|--------------|
-| Modified `lib/search/` | `flutter test test/search/` |
-| Modified shared widget | All tests using that widget |
-| New feature | All tests for that feature |
-| Changed interface/contract | All affected integration tests |
-| Modified core logic | Full test suite |
-
-### Writing Tests
-- **Bloc**: Use `bloc_test` package
-- **Repository**: Mock dependencies with `mockito`
-- **Always add/update tests** for code you change
-- Example:
-```dart
-blocTest<SearchBloc, SearchState>(
-  'emits SearchLoaded when search succeeds',
-  build: () => SearchBloc(repository: mockRepository),
-  act: (bloc) => bloc.add(SearchRequested('query')),
-  expect: () => [SearchLoading(), SearchLoaded(results)],
-);
-```
-
-## Essential Commands
-```bash
-flutter pub get              # Install dependencies
-flutter pub outdated         # Check for updates
-dart fix --apply            # Auto-fix common issues
-flutter clean && flutter pub get  # Nuclear option for build issues
-```
-
-## Platform Support
-**Supported:** Windows, Linux, Android, iOS, macOS
-
-Use platform checks when needed:
-```dart
-import 'dart:io';
-
-if (Platform.isAndroid || Platform.isIOS) {
-  // Mobile-specific code
-} else {
-  // Desktop-specific code
-}
-```
-
-## Golden Rules
-
-### Non-Negotiable Requirements
-1. **No progression with errors** - Fix ALL analyzer errors before next step
-2. **Run `flutter analyze` after EVERY file change** - Don't accumulate errors
-3. **RTL text fields** - Use `RtlTextField` exclusively, never `TextField`
-4. **Icons** - Only `fluentui_system_icons` wrapped in `RtlIcon` — no bare `Icon()`, no `mirrorIcon`, no manual `Transform` on icons
-5. **User messages** - Only through `UiSnack`, never direct SnackBar
-6. **Dialogs** - Only through `custom_ui_components` (SingleActionDialog, TwoActionsDialog, WarningDialog)
-7. **Action buttons** - Only `RecommendedActionButton` or `NeutralActionButton` from `custom_ui_components`
-8. **Settings cards** - Only `SettingsCard` from `settings_card.dart`
-9. **Color theming** - NEVER use hardcoded colors (Colors.red, Colors.blue, etc.), ALWAYS use `Theme.of(context).colorScheme`
-10. **Hover effects** - Remove from ListTile rows with buttons (`hoverColor: Colors.transparent`)
-11. **No color overrides outside `lib/theme/`** - NEVER add `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` in feature files — define them in `lib/theme/` only
-11. **textDirection** - NEVER add `textDirection: TextDirection.rtl` (the app's locale sets RTL globally). ONLY add `textDirection: TextDirection.ltr` for inherently LTR content: OS paths, email addresses, version numbers, URLs
-12. **Test coverage** - Add/update tests for every code change
-13. **Documentation** - Document all public APIs in Hebrew
-14. **Cross-platform** - Code must work on all supported platforms
-15. **Pre-commit trinity** - `analyze` + `test` + `format` = mandatory
-16. **Minimal comments** - Few comments, max 2 lines each, for the first-time reader only (explain *why* / prevent regressions) — never document history. Fix violating comments you encounter
-
-### Common Mistakes to Avoid
-- Fixing a bug by adding code instead of finding and removing the root cause
-- Patching around a null/error with defensive code without understanding why it occurs
-- Asking the user questions that could be answered by reading the code or git history
-- Asking multiple separate questions instead of batching all open questions into one message
-- Writing a large diff to fix what should be a small bug
-- Using `TextField` instead of `RtlTextField`
-- Using Material/Cupertino icons instead of FluentUI
-- Using bare `Icon(...)` where RTL matters — wrap with `RtlIcon` from `lib/widgets/misc/rtl_icon.dart`
-- Adding `mirrorIcon` parameter to any widget — FORBIDDEN (removed in commit 3b4d357)
-- Manual `Transform.scale(scaleX: -1)` or `Transform.flip` on icons — let `RtlIcon` handle it
-- Showing messages without `UiSnack`
-- Using custom dialogs instead of `custom_ui_components` dialogs
-- Using `ElevatedButton`/`TextButton` instead of `RecommendedActionButton`/`NeutralActionButton`
-- Using hardcoded colors instead of `Theme.of(context).colorScheme`
-- Not removing hover effects from ListTile rows with action buttons
-- Adding `hoverColor`, `splashColor`, `overlayColor`, or `.withValues(alpha:...)` outside `lib/theme/` — these belong only in the theme layer
-- Adding `textDirection: TextDirection.rtl` to any `Text` widget — the app's locale already sets RTL globally, this is always redundant
-- Missing `textDirection: TextDirection.ltr` on LTR content (OS paths, emails, version numbers, URLs)
-- Skipping `flutter analyze` before committing
-- Running full test suite instead of relevant tests
-- Formatting entire project instead of modified files
-- Moving to next feature while current code has warnings
-- Not testing on multiple platforms
-- Hardcoding platform-specific paths
-- Creating unnecessary MD files to document changes (CHANGES.md, SUMMARY.md, etc.)
-- Adding too many comments, long comments (over 2 lines), or comments that document history ("used to be X", "changed in commit Y") instead of explaining *why* for a first-time reader
-
----
-
-**Remember: ALWAYS respond in Hebrew!**
+# AGENTS.md — Modern Apple Development Rules
+
+## 1. First action in every task
+
+Before changing code:
+
+1. Inspect this repository and read every applicable `AGENTS.md`.
+2. If this file or another instruction file already exists, preserve valid repository-specific rules and update or merge them rather than replacing them blindly.
+3. Identify:
+   - project type and Apple platforms;
+   - deployment targets;
+   - Swift language mode;
+   - Xcode and SDK versions used by CI;
+   - schemes, targets, packages, dependencies, and build workflows;
+   - whether this repository is an original project or a fork/mirror/derivative of an upstream repository.
+4. Do not invent project structure, file names, targets, schemes, entitlements, or commands.
+
+## 2. Platform policy
+
+This project prefers the newest stable Apple development stack.
+
+- Use the latest stable Xcode release available in the repository's GitHub Actions environment.
+- Use the latest stable Swift language mode supported by that Xcode release.
+- Target the newest stable iOS/iPadOS/macOS/watchOS/visionOS version appropriate to the project.
+- The user does not want backward compatibility with older Apple operating-system versions.
+- Do not add legacy implementations, compatibility wrappers, fallbacks, or old-platform branches.
+- Do not add `if #available` merely to support older systems.
+- Do not silently lower or preserve an old deployment target.
+- If the repository currently targets an older system, report it and propose the minimal required project-setting change.
+- Do not use beta SDKs or beta-only APIs unless explicitly requested.
+
+## 3. Modern API policy
+
+- Use current stable, public, officially supported Apple APIs.
+- Prefer the currently recommended Swift, SwiftUI, Observation, navigation, presentation, layout, data-flow, persistence, and concurrency approaches.
+- Never introduce deprecated APIs.
+- Avoid APIs and patterns that Apple has superseded even when they still compile.
+- Do not use private APIs, undocumented APIs, implementation details, or unreliable runtime tricks.
+- Do not copy obsolete patterns from old tutorials or old answers.
+- When modifying code that uses a legacy pattern, modernize the directly related implementation when safe and in scope.
+- Do not rewrite unrelated working areas merely for novelty.
+
+Examples that must trigger review in new or modified code include, but are not limited to:
+
+- `NavigationView`;
+- new `ObservableObject` / `@Published` models where Observation is appropriate;
+- completion-handler APIs where a stable native async API exists;
+- unnecessary `DispatchQueue.main.async`;
+- UIKit wrappers for functionality now properly available in SwiftUI;
+- obsolete `onChange` overloads;
+- `UIApplication.shared.windows`;
+- unnecessary `AnyView`;
+- avoidable force unwraps and force casts;
+- unstructured or detached tasks without a concrete reason.
+
+Their presence is not automatically an error; inspect context and use the newest correct stable alternative.
+
+## 4. Apple documentation and verification
+
+Apple Developer Documentation pages may depend on JavaScript and may expose only an incomplete shell.
+
+When documentation content is not readable:
+
+1. Do not claim the page was read.
+2. Do not guess an exact declaration, availability, deprecation state, or replacement.
+3. Do not repeatedly say that JavaScript is still loading.
+4. Search other official primary sources:
+   - Apple framework update pages;
+   - Apple release notes;
+   - Apple sample projects;
+   - Apple Technotes;
+   - WWDC session pages and transcripts;
+   - Swift Evolution proposals;
+   - official Swift documentation;
+   - source interfaces and availability metadata from the installed Xcode SDK when CI is explicitly run.
+5. Treat the installed Xcode SDK and compiler diagnostics as the final technical authority.
+
+Always distinguish between:
+
+- verified from readable official documentation;
+- verified from the installed SDK or a successful Xcode build;
+- inferred but not compiled;
+- uncertain and requiring SDK verification.
+
+Never state that an API is current, available, non-deprecated, or accepted by Xcode without a concrete basis.
+
+## 5. Swift requirements
+
+- Use modern stable Swift syntax.
+- Prefer structured concurrency, async/await, actors, `Sendable`, task groups, async sequences, and actor isolation where appropriate.
+- Keep UI-bound state correctly isolated, normally with `@MainActor`.
+- Avoid unnecessary detached tasks, unstructured concurrency, callbacks, and GCD-based designs.
+- Do not silence concurrency diagnostics with unsafe annotations merely to compile.
+- Prefer value semantics unless identity is required.
+- Use clear error propagation and typed errors where useful.
+- Avoid unnecessary type erasure, protocols, managers, service locators, dependency containers, and abstraction layers.
+
+## 6. SwiftUI requirements
+
+- Prefer SwiftUI for new user interfaces.
+- Use UIKit/AppKit only when the latest stable SwiftUI genuinely lacks the capability or the existing architecture requires it.
+- Prefer the Observation framework for new observable state where appropriate.
+- Keep state ownership explicit and predictable.
+- Avoid side effects in view bodies and oversized views.
+- Preserve native behavior, accessibility, Dynamic Type, localization, right-to-left layout, keyboard navigation, pointer interaction, multitasking, and window resizing where relevant.
+- Do not create wrappers around old UIKit APIs when a modern native SwiftUI solution exists.
+
+## 7. Fork and upstream-friendly architecture
+
+When this repository is a fork, mirror, clone, vendor copy, or derivative of an upstream project, optimize every customization for easy future upstream merges.
+
+### Required approach
+
+- First identify the upstream repository, upstream branch, and existing divergence when that information is available.
+- Keep custom features, integrations, branding, platform adaptations, and behavior changes in clearly separated layers, modules, targets, directories, extensions, adapters, configuration files, or packages.
+- Prefer additive changes over invasive edits.
+- Prefer composition, dependency injection, protocols, extension points, adapters, wrappers, subclasses where appropriate, build settings, feature flags, and configuration over copying or rewriting upstream implementations.
+- Reuse existing official extension points before adding new ones.
+- Keep custom assets, localization, scripts, workflows, and documentation outside upstream-owned directories whenever practical.
+- Use clear naming for downstream code, such as `Downstream`, `Custom`, `AppOverrides`, `Integrations`, or a project-specific namespace.
+- Document each unavoidable upstream-file modification and why it is required.
+
+### Changes to upstream-owned files
+
+Modify original upstream files only when required for:
+
+- an entry point;
+- dependency registration;
+- routing or navigation connection;
+- lifecycle integration;
+- exposing a narrow extension hook;
+- build configuration;
+- entitlement or manifest connection;
+- importing or invoking the separate downstream layer.
+
+Such edits must be:
+
+- minimal;
+- localized;
+- easy to identify;
+- free of unrelated formatting changes;
+- free of broad refactoring;
+- documented with the downstream component they connect.
+
+Do not:
+
+- duplicate large upstream files merely to customize small behavior;
+- move or rename upstream files without necessity;
+- reformat untouched upstream code;
+- mix custom business logic deeply into upstream classes or views;
+- replace upstream architecture when a small bridge or adapter is sufficient;
+- delete upstream behavior unless explicitly requested.
+
+### Upstream merge review
+
+For substantial changes, report:
+
+- which files are upstream-owned;
+- which files are newly added downstream files;
+- every unavoidable modification to an upstream file;
+- how the design reduces future merge conflicts;
+- any remaining merge risk.
+
+When an upstream update is being merged:
+
+- compare upstream changes before resolving conflicts;
+- preserve downstream behavior through its separated layer;
+- do not automatically choose “ours” or “theirs” for substantive conflicts;
+- rerun modernization and verification checks only when explicitly requested.
+
+## 8. Normal editing mode
+
+Normal editing mode is the default.
+
+In this mode:
+
+- inspect, reason about, and edit the repository;
+- use static checks available in the current environment;
+- do not trigger GitHub Actions;
+- do not create commits merely to trigger CI;
+- do not start remote builds;
+- do not wait for CI;
+- do not claim Xcode compilation succeeded;
+- briefly state that Xcode verification remains pending when relevant.
+
+A request to write, fix, update, refactor, or add a feature is not permission to run CI.
+
+## 9. Explicit verification mode
+
+Enter verification mode only when the user explicitly asks to:
+
+- build;
+- compile;
+- test;
+- run GitHub Actions;
+- verify with Xcode;
+- run a modernization audit;
+- analyze warnings;
+- archive;
+- generate an IPA;
+- inspect CI failures.
+
+In verification mode:
+
+- use the repository's existing manually triggered workflow where possible;
+- prefer `workflow_dispatch`;
+- use the latest stable Xcode configured by the workflow;
+- build the relevant scheme and configuration;
+- run tests when present and relevant;
+- run static analysis when configured or requested;
+- collect complete errors and warnings;
+- resolve relevant deprecation, availability, and concurrency diagnostics;
+- do not rerun CI repeatedly without a concrete reason;
+- report the workflow, scheme, configuration, SDK, deployment target, Swift mode, and Xcode version when available.
+
+## 10. Modernization audit
+
+When the user explicitly requests a modernization, legacy, or code-health audit, inspect existing code rather than only newly changed code.
+
+Use the checks available to the repository, preferably including:
+
+1. Xcode build diagnostics;
+2. deprecation and availability warnings;
+3. complete Swift concurrency checking;
+4. Swift 6 language-mode diagnostics when supported;
+5. `xcodebuild analyze`;
+6. tests;
+7. SwiftLint when already configured or explicitly approved;
+8. Periphery when already configured or explicitly approved;
+9. dependency update and obsolescence review;
+10. a targeted search for legacy Apple and Swift patterns.
+
+Classify findings as:
+
+- definite compiler or SDK issue;
+- officially deprecated;
+- supported but superseded;
+- concurrency or safety issue;
+- code quality issue;
+- dead-code candidate;
+- dependency issue;
+- manual review only.
+
+Do not automatically rewrite every flagged occurrence. Explain false positives and context-sensitive cases.
+
+Do not add third-party audit tools or alter CI without explicit permission. When requested to create an audit workflow, make it manually triggered and report-only by default.
+
+## 11. GitHub Actions policy
+
+- CI, builds, audits, and IPA generation run only on explicit user request.
+- Do not add or expand `push`, `pull_request`, scheduled, or automatic triggers without explicit permission.
+- Prefer manual `workflow_dispatch`.
+- Do not hide warnings solely to obtain a green build.
+- Do not change signing, certificates, provisioning, bundle identifiers, entitlements, or deployment settings without explaining the need.
+- A successful build does not prove runtime correctness, UI correctness, memory safety, or behavior on a physical device.
+
+## 12. Existing instruction and workflow files
+
+Before creating any of the following, check whether an equivalent already exists:
+
+- `AGENTS.md`;
+- nested `AGENTS.md` files;
+- ChatGPT instruction files;
+- lint configuration;
+- modernization audit workflows;
+- build, test, archive, or IPA workflows.
+
+If one exists:
+
+- inspect it;
+- preserve valid project-specific settings;
+- update and merge missing rules;
+- avoid duplicate files and duplicate workflows;
+- do not overwrite secrets, signing configuration, scheme names, paths, or custom commands;
+- summarize what was retained, added, changed, or removed.
+
+## 13. Completion and honesty
+
+After substantial work, report briefly:
+
+- what changed;
+- which modern APIs and architecture were used;
+- whether the repository is upstream-derived;
+- how downstream customizations were isolated;
+- which upstream files, if any, were minimally modified;
+- whether official documentation was readable;
+- whether an Xcode SDK or compiler actually verified the work;
+- whether GitHub Actions ran;
+- which checks remain pending.
+
+Never claim:
+
+- the project builds;
+- there are no warnings;
+- an API is definitely current;
+- the code works on a real device;
+- an upstream merge will be conflict-free;
+
+unless that exact claim was verified.
+
+## 14. User preference
+
+The user wants modern, advanced, clean Swift and SwiftUI code, targets current stable Apple platforms only, does not want backward compatibility, works from Windows, and uses manually requested GitHub Actions for Apple-platform compilation and verification.
