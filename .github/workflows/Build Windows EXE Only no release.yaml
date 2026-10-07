@@ -5,6 +5,7 @@ name: "Build Windows EXE Only (no release)"
 # (מתקין רגיל + מתקין שקט + מתקין FULL + ZIP נייד), רק לווינדוס.
 
 permissions:
+  actions: read
   contents: read
 
 on:
@@ -29,9 +30,25 @@ jobs:
       VC_REDIST_SHA256: '90E48ADE404E4576D023ABFA374F323555F233982A8805EA9AC63DCA9491A16B'
       VC_REDIST_VERSION: '14.51.36231.0'
     steps:
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Clone repository
         uses: actions/checkout@v4.2.2
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -39,6 +56,14 @@ jobs:
           flutter-version: 3.44.0
           cache: true
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Create Google Calendar Credentials
         shell: pwsh
         run: |
@@ -56,6 +81,14 @@ jobs:
           $credentialsContent | Out-File -FilePath "lib/tools/calendar/services/google_calendar_credentials.dart" -Encoding UTF8
           Write-Host "Google Calendar credentials file created"
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Install Inno Setup (project script + fallback)
         shell: pwsh
         run: |
@@ -81,6 +114,14 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Prepare Flutter dependencies for Windows release
         shell: pwsh
         run: |
@@ -88,6 +129,14 @@ jobs:
           # Generate settings search index (.g.dart) — gitignored, regenerated per build.
           dart run tool/generate_search_index.dart
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Bundle latest VC++ Redistributable runtime DLLs (app-local)
         shell: pwsh
         run: |
@@ -184,6 +233,14 @@ jobs:
           }
           Write-Host "VC++ runtime DLLs staged in $destDir"
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Build Flutter Windows app
         shell: pwsh
         env:
@@ -195,6 +252,14 @@ jobs:
         run: |
           flutter build windows --release
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Zip Windows build
         shell: pwsh
         run: |
@@ -204,6 +269,14 @@ jobs:
           if (-not $relDir) { throw 'Release directory not found' }
           Compress-Archive -Path "$relDir\runner\Release\*" -DestinationPath otzaria-windows.zip
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Check if commit message is a version tag
         id: check_version
         shell: pwsh
@@ -225,6 +298,15 @@ jobs:
             echo "is_version=false" >> $env:GITHUB_OUTPUT
           }
 
+      - name: Live Activity · refresh
+        if: true
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Download library assets for full installer
         if: true
         shell: pwsh
@@ -350,6 +432,15 @@ jobs:
             exit 1
           }
 
+      - name: Live Activity · refresh
+        if: true
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Download dependencies for full installer
         if: true
         shell: pwsh
@@ -363,6 +454,14 @@ jobs:
           $size = [math]::Round((Get-Item "installer\MicrosoftEdgeWebview2Setup.exe").Length / 1MB, 2)
           Write-Host "MicrosoftEdgeWebview2Setup.exe downloaded successfully ($size MB)"
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Build Inno Setup installer
         shell: pwsh
         run: |
@@ -418,30 +517,70 @@ jobs:
             throw "Silent installer build failed"
           }
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Upload Windows installer (regular)
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer
           path: installer/otzaria-*-windows.exe
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Upload Windows installer (full)
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer-full
           path: installer/otzaria-*-windows-full.exe
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Upload Windows installer (silent)
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer-silent
           path: installer/otzaria-*-windows-silent.exe
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Upload Windows installer (full silent)
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer-full-silent
           path: installer/otzaria-*-windows-full-silent.exe
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4.6.2
         with:

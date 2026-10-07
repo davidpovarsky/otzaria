@@ -156,6 +156,8 @@ class RunDetectionAction extends ExternalUriAction {
 /// * `otzaria://plugin/install-local?path=<abs-path>` – התקנת תוסף מקובץ מקומי
 ///   (משמש לשיוך קובץ `.otzplugin` במערכת ההפעלה)
 ///
+/// בנוסף, כמעט כל נתיבי `otzaria://open/...` זמינים גם בקיצור ללא `open`:
+/// `otzaria://search?q=...`, `otzaria://settings/design`, `otzaria://book/123`.
 /// הסכמה, ה-host והתת-נתיב הראשון אינם רגישים לאותיות גדולות/קטנות.
 class ExternalUriRouter {
   static const Map<String, String> _toolAliases = {
@@ -186,15 +188,35 @@ class ExternalUriRouter {
     'about': SettingsTab.about,
   };
 
-  /// ממיר קישור `zayit://` לפורמט `otzaria://` המקביל.
-  /// מחזיר את ה-Uri המקורי אם הוא כבר `otzaria://`, ו-null אם הסכמה לא מוכרת.
+  /// ממיר קישורים חיצוניים לפורמט `otzaria://open/...` הקנוני.
+  /// מחזיר את ה-Uri המקורי אם הוא כבר קנוני, ו-null אם הסכמה לא מוכרת.
   ///
   /// נתמך:
   ///   `zayit://book/{id}`              → `otzaria://open/book/{id}`
   ///   `zayit://book/{id}/line/{index}` → `otzaria://open/book/{id}?index={index}`
+  ///   `otzaria://search?q={text}`      → `otzaria://open/search?q={text}`
+  ///   `otzaria://book/{id}`            → `otzaria://open/book/{id}`
   static Uri? normalizeUri(Uri uri) {
-    if (uri.scheme.toLowerCase() == 'otzaria') return uri;
-    if (uri.scheme.toLowerCase() != 'zayit') return null;
+    final scheme = uri.scheme.toLowerCase();
+
+    if (scheme == 'otzaria') {
+      final host = uri.host.toLowerCase();
+      if (host.isNotEmpty && host != 'open' && host != 'plugin') {
+        return Uri(
+          scheme: 'otzaria',
+          host: 'open',
+          pathSegments: [
+            uri.host,
+            ...uri.pathSegments.where((segment) => segment.isNotEmpty),
+          ],
+          query: uri.query.isEmpty ? null : uri.query,
+          fragment: uri.fragment.isEmpty ? null : uri.fragment,
+        );
+      }
+      return uri;
+    }
+
+    if (scheme != 'zayit') return null;
 
     if (uri.host.toLowerCase() == 'book') {
       final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
