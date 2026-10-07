@@ -17,11 +17,27 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Checkout code
         uses: actions/checkout@v4
 
       # שימוש ב-channel stable + flutter-version קבוע, אחיד עם build-and-announce.yml.
       # הגרסה ננעלת מפני שדרוגים אוטומטיים של pub/CI אחרי שחרור גרסת flutter יציבה חדשה.
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -29,20 +45,52 @@ jobs:
           flutter-version: 3.44.0
           cache: true
 
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Install dependencies
         run: flutter pub get
 
       # חילול אינדקס חיפוש בהגדרות. ה-.g.dart נדחף לרפו, אבל הסקריפט הזה
       # יוודא שהוא עדכני בכל הרצה (אם searchEntries השתנו במהלך ה-PR).
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Generate settings search index
         run: dart run tool/generate_search_index.dart
 
       # ה-trinity של CLAUDE.md: analyze + test (פורמט נבדק locally בlint).
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Analyze
         run: flutter analyze
 
       # הרצת הטסטים עם retry: אם הריצה הראשונה נכשלה, נחלץ את קבצי הטסט
       # שנכשלו ונריץ אותם שוב. רק אם הם נכשלים גם בריצה השנייה - הסטפ נכשל.
+      - name: Live Activity · refresh
+        uses: davidpovarsky/github-automation/live-refresh@main
+        continue-on-error: true
+        with:
+          event: refresh
+          device_id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          github_token: ${{ github.token }}
       - name: Run tests (with retry on failure)
         run: |
           set +e
